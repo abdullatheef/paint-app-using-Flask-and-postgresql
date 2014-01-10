@@ -1,38 +1,33 @@
 from flask import *
-import psycopg2
-import database
-
+from pymongo import MongoClient
 
 app = Flask(__name__)
+
+client = MongoClient()
+db=client.mydb
+col=db.paintstore1
+
+count=1
 @app.route('/')
 def home():
 	return render_template('myPaintApp.html')
+
 @app.route('/gallery/<filename>',methods=['GET'])
 def load(filename=None):
-	conn=psycopg2.connect(database='firstdb')
-	c=conn.cursor()	
-	c.execute("SELECT * FROM paintstore1 WHERE title=%s",[filename])
-	posts=[dict(id=i[0],title=i[1],imagedata=i[2]) for i in c.fetchall()]
-	print posts
+	posts=[i for i in col.find({'title':filename})] 
 	return render_template('picload.html',posts=posts)
+
 
 @app.route('/<filename>',methods=['POST'])
 def save(filename=None):
-	conn=psycopg2.connect(database='firstdb')
-	c=conn.cursor()
-	c.execute("INSERT INTO paintstore1 (title,imagedata) VALUES (%s,%s)",[request.form['name'],request.form['data']])
-	conn.commit()
-	conn.close()
+	global count
+	col.insert({'title':request.form['name'],'imagedata':request.form['data'],'id':count})
+	count+=1
 	return render_template('myPaintApp.html')
 
 @app.route('/gallery')
 def gallery():
-	conn=psycopg2.connect(database='firstdb')
-	c=conn.cursor()
-	c.execute("SELECT * FROM paintstore1 ORDER BY id desc")
-	posts=[dict(id=i[0],title=i[1]) for i in c.fetchall()]
-	conn.commit()
-	conn.close()	
+	posts=[i for i in col.find()] 	
 	return render_template('gallery.html',posts=posts)
 
 app.run(debug = True)
