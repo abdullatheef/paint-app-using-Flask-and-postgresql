@@ -1,37 +1,52 @@
 from flask import *
-from pymongo import MongoClient
+import psycopg2
+import database
+import os
+import urlparse
 
 app = Flask(__name__)
+app.config.from_object(__name__)
 
-client = MongoClient()
-db=client.mydb
-col=db.paintstore1
 
-count=1
 @app.route('/')
 def home():
 	return render_template('myPaintApp.html')
-
 @app.route('/gallery/<filename>',methods=['GET'])
 def load(filename=None):
-	posts=[i for i in col.find({'title':filename})] 
+	urlparse.uses_netloc.append("postgres")
+	url = urlparse.urlparse(os.environ["DATABASE_URL"])
+	con = psycopg2.connect(database=url.path[1:],user=url.username,password=url.password,host=url.hostname,port=url.port)
+	c = con.cursor()
+	c.execute("SELECT * FROM paintstore1 WHERE title=%s",[filename])
+	posts=[dict(id=i[0],title=i[1],imagedata=i[2]) for i in c.fetchall()]
 	return render_template('picload.html',posts=posts)
-
 
 @app.route('/<filename>',methods=['POST'])
 def save(filename=None):
-	global count
-	col.insert({'title':request.form['name'],'imagedata':request.form['data'],'id':count})
-	count+=1
+	urlparse.uses_netloc.append("postgres")
+	url = urlparse.urlparse(os.environ["DATABASE_URL"])
+	con = psycopg2.connect(database=url.path[1:],user=url.username,password=url.password,host=url.hostname,port=url.port)
+	c = con.cursor()
+	c.execute("INSERT INTO paintstore1 (title,imagedata) VALUES (%s,%s)",[request.form['name'],request.form['data']])
+	con.commit()
+	con.close()
 	return render_template('myPaintApp.html')
 
 @app.route('/gallery')
 def gallery():
-	posts=[i for i in col.find()] 	
+	urlparse.uses_netloc.append("postgres")
+	url = urlparse.urlparse(os.environ["DATABASE_URL"])
+	con = psycopg2.connect(database=url.path[1:],user=url.username,password=url.password,host=url.hostname,port=url.port)
+	c = con.cursor()
+	c.execute("SELECT * FROM paintstore1 ORDER BY id desc")
+	posts=[dict(id=i[0],title=i[1]) for i in c.fetchall()]
+	con.commit()
+	con.close()	
 	return render_template('gallery.html',posts=posts)
 
-app.run(debug = True)
-
+if __name__ == "__main__":
+        port = int(os.environ.get("PORT", 5000))
+        app.run(host='0.0.0.0', port=port)
 
 
 
